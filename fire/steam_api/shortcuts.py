@@ -3,10 +3,17 @@ import os
 
 from fire.errors import ShortcutsError
 
+# Basic data encoders/decoders. The idea is to represent entire
+# shortcuts file as hierarchy of types like these. Users could
+# then directly manipulate them like normal types. This way typing
+# of the shortcuts file is consistent with the typing in python.
+# However, for now we'll just use a dict cause that's easy :^)
+
 class UTF8():
   @staticmethod
   def encode(f, data):
-    return data.encode('UTF8')
+    f.write(str(data).encode('UTF8'))
+    f.write(_NUL)
 
   @staticmethod
   def decode(f):
@@ -16,7 +23,7 @@ class UTF8():
 class BitBool():
   @staticmethod
   def encode(f, data):
-    return b'\x01' if data else b'\x00'
+    f.write(b'\x01\x00\x00\x00' if data else b'\x00\x00\x00\x00')
 
   @staticmethod
   def decode(f):
@@ -27,6 +34,11 @@ class BitBool():
 
 _SHORTCUTS_HEADER = b'\x00shortcuts\x00'
 
+# TODO: the versions probably identify the type of the key
+# version 2 is probably 4 byte little endian binary data. It's hard
+# to say without any values besides boolean. However this would make
+# the most sense.
+# TODO: make generic implementation that ties version to encoder/decoder
 _SHORTCUTS_FORMAT = {
   'appname' : {
     'version' : 1,
@@ -81,6 +93,7 @@ _VALID_VERSIONS = [_STARTV1, _STARTV2]
 class Shortcut():
   
   def __init__(self, data, unsupported):
+    self.tags = data.pop('tags')
     self.data = data
     self.unsupported = unsupported
     return
@@ -115,14 +128,14 @@ def parse_shortcuts_file(shortcuts_file):
   if not os.path.exists(shortcuts_file):
     return []
 
-  with open(shortcuts_file, 'rb') as f:
-    if f.read(len(_SHORTCUTS_HEADER)) != _SHORTCUTS_HEADER:
-      raise ShortcutsError('Invalid shortcuts file %s' % shortcuts_file)
-    
-    try:
-     return _parse_list(f, _parse_shortcut_entry)
-    except Exception as e:
-      raise ShortcutsError('Could not parse shortcuts file.') from e
+  try:
+    with open(shortcuts_file, 'rb') as f:
+      if f.read(len(_SHORTCUTS_HEADER)) != _SHORTCUTS_HEADER:
+        raise ShortcutsError('Invalid shortcuts file %s' % shortcuts_file)
+      
+      return _parse_list(f, _parse_shortcut_entry)
+  except Exception as e:
+    raise ShortcutsError('Could not parse shortcuts file.') from e
 
 def _parse_list(f, handler):
   contents = []
@@ -178,7 +191,6 @@ def _parse_key_pair_v2(f):
     raise ShortcutsError('Invalid v2 key terminator: %s' % key)
 
   return key, value
-  
 
 def _parse_tag_entry(f):
   # Don't care about list index, throw it away
@@ -187,3 +199,47 @@ def _parse_tag_entry(f):
 
   return UTF8.decode(f)
 
+def output_shortcuts_file(shortcuts_file, data):
+  with open(shortcuts_file, 'wb') as f: 
+    try:
+     return _output_list(f, _SHORTCUTS_HEADER, _output_shortcut_entry, data)
+    except Exception as e:
+      raise ShortcutsError('Could not output shortcuts file.') from e
+
+def _output_list(f, header, handler, data):
+  f.write(header)
+
+  for idx, entry in enumerate(data):
+    handler(f, idx, entry)
+
+  f.write(_ENDLIST)
+
+def _output_shortcut_entry(f, index, shortcut):
+  f.write(_NUL)
+  UTF8.encode(f, index)
+  
+  # TODO: unsupported keys
+  for key, value in shortcut.data.items():
+    version = _SHORTCUTS_FORMAT[key]['version']
+    if version == 1:
+      _output_key_pair_v1(f, key, value)
+    elif version == 2:
+      _output_key_pair_v2(f, key, value)
+
+  _output_list(f, _STARTTAGS, _output_tag_entry, shortcut.tags)
+
+def _output_key_pair_v1(f, key, value):
+  f.write(_STARTV1)
+  UTF8.encode(f, key)
+  UTF8.encode(f, value)
+
+def _output_key_pair_v2(f, key, value):
+  f.write(_STARTV2)
+  UTF8.encode(f, key)
+  BitBool.encode(f, value)
+
+def _output_tag_entry(f, index, tag):
+  f.write(b'\x01')
+
+  UTF8.encode(f, index)
+  UTF8.encode(f, tag)
