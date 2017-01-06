@@ -13,8 +13,10 @@ osx     = (system == 'Darwin')
 if windows:
   import winreg
 
-def _windows_reg_str(path):
-  return QueryValue(winreg.HKEY_CURRENT_USER, path)
+def _windows_reg_str(path, sub_key):
+  with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+    value, type = winreg.QueryValueEx(key, sub_key)
+    return value
 
 def _linux_userdata_paths():
   return [
@@ -47,7 +49,7 @@ def _osx_userdata_paths():
 def _windows_userdata_paths():
   return [
     os.path.join(
-      _windows_reg_str('Software\Valve\Steam\SteamPath'),
+      _windows_reg_str(r'Software\Valve\Steam', 'SteamPath'),
       'userdata'
     )
   ]
@@ -59,7 +61,7 @@ _paths = {
   },
 
   'Windows' : {
-    'exe' : lambda: [_windows_reg_str('Software\Valve\Steam\SteamExe')],
+    'exe' : lambda: [_windows_reg_str(r'Software\Valve\Steam', 'SteamExe')],
     'userdata' : _windows_userdata_paths
   },
 
