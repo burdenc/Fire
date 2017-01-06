@@ -177,15 +177,17 @@ def _parse_shortcut_entry(f):
 def _parse_key_pair_v1(f):
   # TODO: unsupported key
   key = _read_value(f).decode('UTF8')
-  value = _SHORTCUTS_FORMAT[key]['encoder'].decode(f)
+  #value = _SHORTCUTS_FORMAT[key]['encoder'].decode(f)
+  value = UTF8.decode(f)
 
   return key, value
 
 def _parse_key_pair_v2(f):
   # TODO: unsupported key
   key = _read_value(f).decode('UTF8')
-  value = _SHORTCUTS_FORMAT[key]['encoder'].decode(f)
-
+  #value = _SHORTCUTS_FORMAT[key]['encoder'].decode(f)
+  value = BitBool.decode(f)
+  
   # Version 2 keys have 2 extra null terminators
   if f.read(len(_ENDV2)) != _ENDV2:
     raise ShortcutsError('Invalid v2 key terminator: %s' % key)
@@ -220,10 +222,10 @@ def _output_shortcut_entry(f, index, shortcut):
   
   # TODO: unsupported keys
   for key, value in shortcut.data.items():
-    version = _SHORTCUTS_FORMAT[key]['version']
-    if version == 1:
+    #version = _SHORTCUTS_FORMAT[key]['version']
+    if type(key) == str:
       _output_key_pair_v1(f, key, value)
-    elif version == 2:
+    elif type(key) == bool:
       _output_key_pair_v2(f, key, value)
 
   _output_list(f, _STARTTAGS, _output_tag_entry, shortcut.tags)
