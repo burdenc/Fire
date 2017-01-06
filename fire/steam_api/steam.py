@@ -30,7 +30,8 @@ def get_steam_handle(userdata_path='', exe_path=''):
 
 def get_users(steam_handle):
   users = os.listdir(steam_handle.userdata_path)
-  users.remove('anonymous')
+  if 'anonymous' in users:
+    users.remove('anonymous')
 
   return [SteamUser(steam_handle, u) for u in users]
 
